@@ -276,7 +276,6 @@ class VspModel(VspElement):
         id = vsp.ExecAnalysis(type)
         data = vsp.GetAllDataNames(id)
         results = vsp.GetDoubleResults(id, unit)[0]
-        vsp.DeleteAllResults()
         return results
 
     def set_param(self, id, value):
