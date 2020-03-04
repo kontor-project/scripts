@@ -4,12 +4,11 @@ from json import dumps, JSONEncoder, loads
 from re import compile as re_compile
 from collections import OrderedDict
 from functools import partial
+from openvsp import vsp
 try:
     from IPython.display import display_javascript, display_html
 except ImportError:
     display_html, display_javascript = None, None
-from openvsp import vsp
-
 
 regex_listname = re_compile(r"^(?P<name>[a-zA-Z]+)_*(?P<i>\d*)")
 EXCLUDE_GROUPS = ('BBox',)
@@ -264,8 +263,6 @@ class VspModel(VspElement):
 
     def get_analysis_names(self):
         pass
-        # print(vsp.GetAnalysisInputNames())
-        # print(vsp.GetAnalysisInputTypes())
         print(vsp.GetNumAnalysis())
 
     def h(self, type='ParasiteDrag', unit='Total_CD_Total'):
