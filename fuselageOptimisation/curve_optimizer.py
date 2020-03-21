@@ -1,6 +1,7 @@
 import copy
 import multiprocessing
 import time
+import os
 import matplotlib.pyplot as plt
 from vsp_interface import VspModel
 
@@ -24,6 +25,10 @@ class Node():
         pass
         self._model = VspModel(self._filename)
 
+    def set_filename(filename):
+        pass
+        self._filename = filename
+
     def set_model_param(self, id, value):
         pass
         self._model.set_param(id=id, value=value)
@@ -35,7 +40,19 @@ class Node():
         pass
         self._model.save_file(self._filename)
 
-def modify_detached(model, i, element, c, child_number, children):
+def close_file_descriptors():
+    pass
+    global KEEP_FD
+    current_dir = os.getcwd()
+    for fd in os.listdir(os.path.join("/proc", str(os.getpid()), "fd")):
+        if int(fd) not in KEEP_FD:
+            try:
+                os.close(int(fd))
+            except OSError:
+                pass
+    os.path.join(current_dir)
+
+def detached_worker(model, i, element, c, child_number, children):
     pass
     value = model['FuselageBase']['XSec'][i][element]['value'] * c
     id = model['FuselageBase']['XSec'][i][element]['_id']
@@ -43,7 +60,9 @@ def modify_detached(model, i, element, c, child_number, children):
     child = Node(child_number=child_number + 1, model=model)
     child.set_model_param(id=id, value=value)
     # sometimes we get h = 0 because of who knows
-    children[child_number] = child
+    children.append(child)
+
+KEEP_FD = set([0, 1, 2])
 
 filename = '/home/mregger/Documents/HardwareStuff/kontor/design/openVSP/kontor.vsp3'
 
@@ -52,9 +71,10 @@ performance = {
     'c': [],
     't': []
 }
+max_workers = 10 # max number of subproccesses allowed
 
-t = 2      # number of iterations
-c = 0.90     # change factor (multiply values by this)
+t = 30      # number of iterations
+c = 0.30     # change factor (multiply values by this)
 
 h = 0         # current heuristic value
 old_h = None  # previous heuristic value
@@ -68,55 +88,66 @@ nose_min_height = 3
 
 starting_model = VspModel(filename)
 parent = Node(starting_model, filename=filename)
-
+parent.h = 99
 
 while t > 0:
     pass
     i = 0
 
     manager = multiprocessing.Manager()
+    parent.load_model()
     model = parent.get_model()
     sections = model['FuselageBase']['XSec']
     jobs = []
     child_number = 0
-    children = manager.dict()
+    children = manager.list()
 
     for i in range(3, len(sections)):
         pass
         for element in sections[i]:
             pass
-            # if 'Angle' in element or 'Strength' in element or 'Slew' in element:
-            if 'Angle' in element and 'Top' in element:
+            # if 'Angle' in element and 'Top' in element:
+            if 'Angle' in element or 'Strength' in element or 'Slew' in element:
                 pass
-                child = multiprocessing.Process(target=modify_detached, args=(model, i, element, (1 + c), child_number, children, ))
+                child = multiprocessing.Process(target=detached_worker, args=(model, i, element, (1 + c), child_number, children, ))
                 child.start()
                 jobs.append(child)
                 child_number += 1
-                # time.sleep(2)
-                child = multiprocessing.Process(target=modify_detached, args=(model, i, element, (1 - c), child_number, children, ))
+
+                child = multiprocessing.Process(target=detached_worker, args=(model, i, element, (1 - c), child_number, children, ))
                 child.start()
                 jobs.append(child)
                 child_number += 1
-                # time.sleep(2)
+
+            if len(jobs) >= max_workers:
+                print('waiting for children...')
+                for child in jobs:
+                    pass
+                    child.join()
+                jobs = []
 
     pool = multiprocessing.Pool(processes=child_number)
     # children = pool.map(child, [c for c in range(child_number)])
-    print('waiting for children...')
-    for child in jobs:
-        pass
-        child.join()
     print('done')
     pool.close()
-    # run heuristic
-    dir(children.values())
-    results = children.values().sort(key=lambda x: x.h, reverse=True)
-    print(len(children))
-    parent = Node(model=children[0].get_model(), filename=filename)
-    print('pick of the litter: ', children[0]._filename)
+    # cast shared list as list and sort by h
+    for child in children[:]:
+        if child.h < parent.h:
+            parent = child
+
+    # set parent to top performer
+    print('pick of the litter: ', parent._filename, ' ', parent.h)
     print('---------------------------\nt: ', t)
+    parent.load_model()
+    parent._filename = filename
+    parent.save_model()
+    # close_file_descriptors()
+
+    # reset values
     t -= 1
     c *= 0.9
     child_number = 0
+    parent.h = 99
 # plt.plot(performance['h'], label='h')
 # plt.plot(performance['c'], label='c')
 # plt.savefig('r.png')
