@@ -1,6 +1,7 @@
 import copy
 import multiprocessing
 import time
+import random
 import os
 import matplotlib.pyplot as plt
 from vsp_interface import VspModel
@@ -62,6 +63,14 @@ def detached_worker(model, i, element, c, child_number, children):
     # sometimes we get h = 0 because of who knows
     children.append(child)
 
+def random_step_check():
+    global r
+    global dr
+    check = random.uniform(0, 1) < r
+    if check:
+        print('randomness pass')
+    return check
+
 KEEP_FD = set([0, 1, 2])
 
 filename = '/home/mregger/Documents/HardwareStuff/kontor/design/openVSP/kontor.vsp3'
@@ -74,8 +83,11 @@ performance = {
 max_workers = 10 # max number of subproccesses allowed
 
 t = 30      # number of iterations
-c = 0.30     # change factor (multiply values by this)
+c = 0.30    # change factor (multiply values by this)
+dc = 0.9    # rate of change in c
 
+r = 1.0       # probability of making a wrong step
+dr = 0.8      # rate of change of randomness probability
 h = 0         # current heuristic value
 old_h = None  # previous heuristic value
 
@@ -132,12 +144,11 @@ while t > 0:
     pool.close()
     # cast shared list as list and sort by h
     for child in children[:]:
-        if child.h < parent.h:
+        if child.h < parent.h or random_step_check():
             parent = child
 
     # set parent to top performer
     print('pick of the litter: ', parent._filename, ' ', parent.h)
-    print('---------------------------\nt: ', t)
     parent.load_model()
     parent._filename = filename
     parent.save_model()
@@ -145,9 +156,11 @@ while t > 0:
 
     # reset values
     t -= 1
-    c *= 0.9
+    c *= dc
+    r *= dr
     child_number = 0
     parent.h = 99
+    print('---------------------------\nt: ', t, ' -- ', r)
 # plt.plot(performance['h'], label='h')
 # plt.plot(performance['c'], label='c')
 # plt.savefig('r.png')
